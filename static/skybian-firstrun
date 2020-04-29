@@ -12,12 +12,12 @@ HYPERVISOR_CONF=/etc/skywire-hypervisor.json
 TLS_KEY=/etc/skywire-hypervisor/key.pem
 TLS_CERT=/etc/skywire-hypervisor/cert.pem
 
-NET_NAME="Wired connection 1"
+NET_NAME="skynet"
 
 # Stop here if config files are already generated.
-if [[ -f "$VISOR_CONF" || -f "$HYPERVISOR_CONF" ]]; then
+if [[ -n "$IP" ]]; then
   echo "Nothing to be done here."
-  systemctl disable skybian-firstrun.service
+  sudo systemctl disable skybian-firstrun.service
   exit 0
 fi
 
@@ -59,19 +59,32 @@ setup_skywire || exit 1
 # params. If these are not defined, defaults will be kept.
 setup_network()
 {
-  echo "Setting up network $NET_NAME..."
-
-  if [[ -n "$IP" ]]; then
-    echo "Setting manual IP to $IP for $NET_NAME."
-    nmcli con mod "$NET_NAME" ipv4.addresses "$IP" ipv4.method "manual"
+  # If IP and GW are both empty, do nothing.
+  if [[ -z "$IP" && -z "$GW" ]]; then
+    echo "ENVs (IP, GW) are both empty, skipping network setup."
+    return 0
   fi
 
-  if [[ -n "$GW" ]]; then
-    echo "Setting manual Gateway IP to $GW for $NET_NAME."
-    nmcli con mod "$NET_NAME" ipv4.gateway "$GW"
+  CURRENT_IP=$(nmcli c show "$NET_NAME" | grep ipv4.addresses | awk '{print $2}')
+  echo "Current IP address for connection $NET_NAME: $CURRENT_IP"
+
+  # If network is already setup_skywire, do nothing.
+  if [[ "$CURRENT_IP" == "$IP/24" ]]; then
+    echo "Connection $NET_NAME already set, skipping network setup."
+    return 0
   fi
 
-  nmcli con mod "$NET_NAME" ipv4.dns "1.0.0.1, 1.1.1.1"
+  # Delete all nm connections.
+  echo "Deleting all nm connections..."
+  TEMP_FILE=$(mktemp)
+  sudo nmcli -f NAME -t c > "$TEMP_FILE"
+  while read -r line; do sudo nmcli c delete "$line"; done < "$TEMP_FILE"
+  rm "$TEMP_FILE"
+
+  # Recreate connections.
+  echo "Setting up nm connection $NET_NAME..."
+  sudo nmcli con add con-name "$NET_NAME" ifname eth0 type ethernet ip4 "$IP"/24 gw4 "$GW"
+  sudo nmcli con mod "$NET_NAME" ipv4.dns "1.0.0.1, 1.1.1.1"
 }
 setup_network || exit 1
 
@@ -84,12 +97,16 @@ for file in /etc/ssh/ssh_host* ; do
 case $MD in
   "VISOR")
     echo "Enabling 'skywire-visor.service'."
+    systemctl daemon-reload
+    sleep 2
     systemctl enable skywire-visor.service
     sleep 2
     systemctl start skywire-visor.service
     ;;
   "HYPERVISOR")
     echo "Enabling 'skywire-hypervisor.service'."
+    systemctl daemon-reload
+    sleep 2
     systemctl enable skywire-hypervisor.service
     sleep 2
     systemctl start skywire-hypervisor.service
@@ -99,5 +116,9 @@ case $MD in
     ;;
 esac
 
-systemctl disable skybian-firstrun.service
+# Change pi user password to skyraspbian
+echo "Changing the pi user password to skyraspbian."
+printf "skybian\nskybian\n" | passwd pi
+
+#sudo systemctl disable skybian-firstrun.service
 exit 0
