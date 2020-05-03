@@ -14,7 +14,7 @@ source "$(pwd)/build.conf"
 
 # Needed tools to run this script, space separated
 # On arch/manjaro, the qemu-aarch64-static dependency is satisfied by installing the 'qemu-arm-static' AUR package.
-NEEDED_TOOLS="rsync wget 7z cut awk sha256sum gzip tar e2fsck losetup resize2fs truncate sfdisk qemu-aarch64-static go"
+NEEDED_TOOLS="rsync wget 7z cut awk sha256sum gzip tar e2fsck losetup resize2fs truncate sfdisk qemu-aarch64-static qemu-arm-static go"
 
 # Output directory.
 PARTS_DIR=${ROOT}/output/parts
@@ -238,6 +238,21 @@ get_raspbian()
     #info "Image integrity assured via sha256sum."
     notice "Final image file is ${RASPBIAN_IMG}"
 
+	info "Mounting /boot"
+	mount -o loop,offset="${IMG_BOOT_OFFSET}" "${BASE_IMG}" /mnt
+ 
+	info "Enabling UART"
+	sudo sed -i '/^#dtoverlay=vc4-fkms-v3d.*/a enable_uart=1' /mnt/config.txt
+ 
+	info "Enabling HDMI"
+	sudo sed -i 's/#hdmi_force_hotplug=1/hdmi_force_hotplug=1/' /mnt/config.txt
+ 
+	info "Enabling SSH"
+	touch /mnt/SSH.txt
+ 
+	info "Unmounting /boot"
+	umount /mnt
+
     # get version & kernel version info
     #ARMBIAN_VERSION=$(echo "${ARMBIAN_IMG}" | awk -F '_' '{ print $2 }')
     #ARMBIAN_KERNEL_VERSION=$(echo "${ARMBIAN_IMG}" | awk -F '_' '{ print $6 }' | rev | cut -d '.' -f2- | rev)
@@ -366,19 +381,25 @@ chroot_actions()
 
   # enable chroot
   info "Seting up chroot jail..."
-  sudo cp "$(command -v qemu-aarch64-static)" "${FS_MNT_POINT}/usr/bin/"
+  sudo cp "$(command -v qemu-arm-static)" "${FS_MNT_POINT}/usr/bin/"
   sudo mount -t sysfs none "${FS_MNT_POINT}/sys"
   sudo mount -t proc none "${FS_MNT_POINT}/proc"
   sudo mount --bind /dev "${FS_MNT_POINT}/dev"
   sudo mount --bind /dev/pts "${FS_MNT_POINT}/dev/pts"
+  
+  # ld.so.preload fix
+  sed -i 's/^/#/g' /mnt/raspbian/etc/ld.so.preload
 
   # Executing chroot script
   info "Executing chroot script..."
   sudo chroot "${FS_MNT_POINT}" /tmp/chroot_commands.sh
-
+  
+  # revert ld.so.preload fix
+  sed -i 's/^#//g' /mnt/raspbian/etc/ld.so.preload
+  
   # disable chroot
   info "Disabling the chroot jail..."
-  sudo rm "${FS_MNT_POINT}/usr/bin/qemu-aarch64-static"
+  sudo rm "${FS_MNT_POINT}/usr/bin/qemu-arm-static"
   sudo umount "${FS_MNT_POINT}/sys"
   sudo umount "${FS_MNT_POINT}/proc"
   sudo umount "${FS_MNT_POINT}/dev/pts"
@@ -449,27 +470,6 @@ clean_output_dir()
 
   # cd to root.
   cd "${ROOT}" || return 1
-}
-
-# enable ssh, hdmi and uart
-
-enable_ssh()
-{
-
- info "Mounting /boot"
- mount -o loop,offset="${IMG_BOOT_OFFSET}" "${BASE_IMG}" /mnt
- 
- info "Enabling UART"
- sudo sed -i '/^#dtoverlay=vc4-fkms-v3d.*/a enable_uart=1' /mnt/config.txt
- 
- info "Enabling HDMI"
- sudo sed -i 's/#hdmi_force_hotplug=1/hdmi_force_hotplug=1/' /mnt/config.txt
- 
- info "Enabling SSH"
- touch /mnt/SSH.txt
- 
- info "Unmounting /boot"
- umount /mnt
 }
 
 # build disk

@@ -36,9 +36,9 @@ sudo apt-get clean
 #/sbin/fake-hwclock save force
 
 # Mkdir
-mkdir -p /etc/skywire-hypervisor || 0
-mkdir -p /var/skywire-hypervisor || 0
+sudo mkdir -p /etc/skywire-hypervisor || 0
+sudo mkdir -p /var/skywire-hypervisor || 0
 
 # Enable systemd units.
 info "Enabling systemd units..."
-systemctl enable skybian-firstrun.service || exit 1
+sudo systemctl enable skybian-firstrun.service || exit 1

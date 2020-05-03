@@ -117,8 +117,8 @@ case $MD in
 esac
 
 # Change pi user password to skyraspbian
-echo "Changing the pi user password to skyraspbian."
-printf "skybian\nskybian\n" | passwd pi
+#echo "Changing the pi user password to skyraspbian."
+#printf "skybian\nskybian\n" | passwd pi
 
 #sudo systemctl disable skybian-firstrun.service
 exit 0
