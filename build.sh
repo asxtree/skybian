@@ -451,6 +451,27 @@ clean_output_dir()
   cd "${ROOT}" || return 1
 }
 
+# enable ssh, hdmi and uart
+
+enable_ssh()
+{
+
+ info "Mounting /boot"
+ mount -o loop,offset="${IMG_BOOT_OFFSET}" "${BASE_IMG}" /mnt
+ 
+ info "Enabling UART"
+ sudo sed -i '/^#dtoverlay=vc4-fkms-v3d.*/a enable_uart=1' /mnt/config.txt
+ 
+ info "Enabling HDMI"
+ sudo sed -i 's/#hdmi_force_hotplug=1/hdmi_force_hotplug=1/' /mnt/config.txt
+ 
+ info "Enabling SSH"
+ touch /mnt/SSH.txt
+ 
+ info "Unmounting /boot"
+ umount /mnt
+}
+
 # build disk
 build_disk()
 {
@@ -520,7 +541,10 @@ main_build()
 
     # setup chroot
     chroot_actions || return 1
-
+	
+	# enable ssh
+	enable_ssh || return 1
+	
     # build manager image
     build_disk || return 1
 
