@@ -3,6 +3,7 @@
 # This is the main script to build the Skybian OS for Skycoin miners.
 #
 # Author: evanlinjin@github.com, @evanlinjin in telegram
+# Updated by: asxtree@github.com, @asxtree in telegram
 # Skycoin / Rudi team
 #
 
@@ -13,7 +14,7 @@ source "$(pwd)/build.conf"
 ## Variables.
 
 # Needed tools to run this script, space separated
-# On arch/manjaro, the qemu-aarch64-static dependency is satisfied by installing the 'qemu-arm-static' AUR package.
+# On arch/manjaro, the qemu-arm-static dependency is satisfied by installing the 'qemu-user-static' package.
 NEEDED_TOOLS="rsync wget 7z cut awk sha256sum gzip tar e2fsck losetup resize2fs truncate sfdisk qemu-aarch64-static qemu-arm-static go"
 
 # Output directory.
@@ -181,7 +182,7 @@ download_raspbian()
     (error "Download failed." && return 1)
 }
 
-# Get the latest ARMBIAN image for Orange Pi Prime
+# Get the latest RASPBIAN image for Raspberry Pi boards
 get_raspbian()
 {
   local RASPBIAN_IMG_7z="raspbian.7z"
@@ -214,7 +215,7 @@ get_raspbian()
         # image already extracted nothing to do
         notice "Raspbian image already extracted"
     else
-        # extract armbian
+        # extract raspbian
         info "Extracting image..."
         if ! 7z e "${RASPBIAN_IMG_7z}" ; then
             error "Extracting failed, file is corrupt? Re-run the script to get it right."
@@ -223,7 +224,7 @@ get_raspbian()
         fi
     fi
 
-    # check integrity
+    # check integrity - Needs to be updated for Raspbian
     #info "Testing image integrity..."
     #if ! $(command -v sha256sum) -c --status -- *.sha ; then
     #    error "Integrity of the image is compromised, re-run the script to get it right."
@@ -237,29 +238,6 @@ get_raspbian()
     # imge integrity
     #info "Image integrity assured via sha256sum."
     notice "Final image file is ${RASPBIAN_IMG}"
-
-	info "Mounting /boot"
-	mount -o loop,offset="${IMG_BOOT_OFFSET}" "${BASE_IMG}" /mnt
- 
-	info "Enabling UART"
-	sudo sed -i '/^#dtoverlay=vc4-fkms-v3d.*/a enable_uart=1' /mnt/config.txt
- 
-	info "Enabling HDMI"
-	sudo sed -i 's/#hdmi_force_hotplug=1/hdmi_force_hotplug=1/' /mnt/config.txt
- 
-	info "Enabling SSH"
-	touch /mnt/SSH.txt
- 
-	info "Unmounting /boot"
-	umount /mnt
-
-    # get version & kernel version info
-    #ARMBIAN_VERSION=$(echo "${ARMBIAN_IMG}" | awk -F '_' '{ print $2 }')
-    #ARMBIAN_KERNEL_VERSION=$(echo "${ARMBIAN_IMG}" | awk -F '_' '{ print $6 }' | rev | cut -d '.' -f2- | rev)
-
-    # info to the user
-    #notice "Armbian version: ${ARMBIAN_VERSION}"
-    #notice "Armbian kernel version: ${ARMBIAN_KERNEL_VERSION}"
 }
 
 get_all()
@@ -269,6 +247,23 @@ get_all()
   get_tools || return 1
 }
 
+enable_ssh()
+{
+	info "Mounting /boot"
+	mount -o loop,offset=4194304 "${PARTS_DIR}/raspbian/${RASPBIAN_IMG}" "${FS_MNT_POINT}"
+ 
+	info "Enabling UART"
+	sudo sed -i '/^#dtoverlay=vc4-fkms-v3d.*/a enable_uart=1' "${FS_MNT_POINT}/config.txt"
+ 
+	info "Enabling HDMI"
+	sudo sed -i 's/#hdmi_force_hotplug=1/hdmi_force_hotplug=1/' "${FS_MNT_POINT}/config.txt"
+ 
+	info "Enabling SSH"
+	touch "${FS_MNT_POINT}/SSH.txt"
+ 
+	info "Unmounting /boot"
+	umount "${FS_MNT_POINT}"
+}
 
 # setup the rootfs to a loop device
 setup_loop()
@@ -305,35 +300,23 @@ rootfs_check()
 }
 
 # Prepares base image.
-# - Copy armbian img to base img loc
-# - Increase base image size & prepare loop device
+# - Copy raspbian img to base img loc
 # - Mount loop device
 prepare_base_image()
 {
-  # Armbian image is tight packed, and we need room for adding our
-  # bins, apps & configs, so we will make it bigger
+  # Raspbian has enough room for adding our
+  # bins, apps & configs, making it bigger may result in kernel panic
 
   # clean
   info "Cleaning..."
   rm -rf "${IMAGE_DIR:?}/*" &> /dev/null || true
 
-  # copy armbian image to base image location
+  # copy raspbian image to base image location
   info "Copying base image..."
   cp "${PARTS_DIR}/raspbian/${RASPBIAN_IMG}" "${BASE_IMG}" || return 1
 
-  # Add space to base image
-  if [[ "$BASE_IMG_ADDED_SPACE" -ne "0" ]]; then
-    info "Adding ${BASE_IMG_ADDED_SPACE}MB of extra space to the image..."
-    truncate -s +"${BASE_IMG_ADDED_SPACE}M" "${BASE_IMG}"
-    echo ", +" | sfdisk -N1 "${BASE_IMG}" # add free space to the part 1 (sfdisk way)
-  fi
-
   info "Setting up loop device..."
   setup_loop || return 1
-  rootfs_check || return 1
-
-  info "Resizing root fs..."
-  sudo resize2fs "${IMG_LOOP}" || return 1
   rootfs_check || return 1
 
   info "Mounting root fs to ${FS_MNT_POINT}..."
@@ -354,7 +337,7 @@ copy_to_img()
   info "Copying skywire tools..."
   sudo cp -rf "$PARTS_TOOLS_DIR"/* "$FS_MNT_POINT"/usr/bin/ || return 1
 
-  # Copy scripts
+  # Copy scripts - Needs to be updated with raspbian motd
   #info "Copying disable user creation script..."
   #sudo cp -f "${ROOT}/static/armbian-check-first-login.sh" "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
   #sudo chmod +x "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
@@ -371,7 +354,7 @@ copy_to_img()
   info "Done!"
 }
 
-# fix some defaults on armbian to skywire defaults
+# fix some defaults on raspbian to skywire defaults
 chroot_actions()
 {
   # copy chroot scripts to root fs
@@ -388,14 +371,14 @@ chroot_actions()
   sudo mount --bind /dev/pts "${FS_MNT_POINT}/dev/pts"
   
   # ld.so.preload fix
-  sed -i 's/^/#/g' /mnt/raspbian/etc/ld.so.preload
+  sed -i 's/^/#/g' "${FS_MNT_POINT}/etc/ld.so.preload"
 
   # Executing chroot script
   info "Executing chroot script..."
   sudo chroot "${FS_MNT_POINT}" /tmp/chroot_commands.sh
   
   # revert ld.so.preload fix
-  sed -i 's/^#//g' /mnt/raspbian/etc/ld.so.preload
+  sed -i 's/^#//g' "${FS_MNT_POINT}/etc/ld.so.preload"
   
   # disable chroot
   info "Disabling the chroot jail..."
@@ -495,12 +478,6 @@ build_disk()
   # check integrity & fix minor errors
   rootfs_check
 
-  # TODO [TEST]
-  # shrink the partition to a minimum size
-  # sudo resize2fs -M "${IMG_LOOP}"
-  #
-  # shrink the partition
-
   # force a FS sync
   info "Forcing a fs rsync to umount the loop device"
   sudo sync
@@ -532,6 +509,9 @@ main_build()
 
     # download resources
     get_all || return 1
+	
+	# enable ssh, hdmi and uart
+	enable_ssh || return 1
 
     # prepares and mounts base image
     prepare_base_image || return 1
@@ -541,9 +521,6 @@ main_build()
 
     # setup chroot
     chroot_actions || return 1
-	
-	# enable ssh
-	enable_ssh || return 1
 	
     # build manager image
     build_disk || return 1
