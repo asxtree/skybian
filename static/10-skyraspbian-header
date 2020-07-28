@@ -1,10 +1,4 @@
-# Copyright (c) Authors: asxtree@skycoin.com
-#
-# This file is licensed under the terms of the GNU General Public
-# License version 2. This program is licensed "as is" without any
-# warranty of any kind, whether express or implied.
-#
-# Modified and renamed by @asxtree
+#!/bin/bash
 
 . /etc/os-release
 
@@ -34,12 +28,12 @@ echo "$(tput setaf 2)
 `uname -srmo`
 $(tput sgr0)
 
-Uptime:		`echo -e "\e[0;32m$UPTIME\x1B[0m"`
-Load Averages:	`echo -e "\e[0;32m$one, $five, $fifteen (1, 5, 15 min)\x1B[0m"`		
-Memory usage: 	`cat /proc/meminfo | grep MemFree | awk {'print $2'}`kB (Free) / `cat /proc/meminfo | grep MemTotal | awk {'print $2'}`kB (Total)
-CPU temp:	`echo -e "\e[0;32m$CPUTemp\x1B[0m"`
-Usage of /:	`echo -e "\e[0;32m$(df -h | awk 'NR==2{print $5}')\x1B[0m of $(df -h | awk 'NR==2{print $2}')"`
-IP:		`echo -e "\e[0;32m$IP\x1B[0m"`
+Uptime:         `echo -e "\e[0;32m$UPTIME\x1B[0m"`
+Load Averages:  `echo -e "\e[0;32m$one, $five, $fifteen (1, 5, 15 min)\x1B[0m"`		
+Memory usage:   `cat /proc/meminfo | grep MemFree | awk {'print $2'}`kB (Free) / `cat /proc/meminfo | grep MemTotal | awk {'print $2'}`kB (Total)
+CPU temp:       `echo -e "\e[0;32m$CPUTemp\x1B[0m"`
+Usage of /:     `echo -e "\e[0;32m$(df -h | awk 'NR==2{print $5}')\x1B[0m of $(df -h | awk 'NR==2{print $2}')"`
+IP:             `echo -e "\e[0;32m$IP\x1B[0m"`
 
 $MY_OUT
 
