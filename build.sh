@@ -341,10 +341,11 @@ copy_to_img()
   #info "Copying disable user creation script..."
   #sudo cp -f "${ROOT}/static/armbian-check-first-login.sh" "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
   #sudo chmod +x "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
-  #info "Copying headers (so OS presents itself as Skybian)..."
-  #sudo cp "${ROOT}/static/10-skybian-header" "${FS_MNT_POINT}/etc/update-motd.d/" || return 1
-  #sudo chmod +x "${FS_MNT_POINT}/etc/update-motd.d/10-skybian-header" || return 1
-  #sudo cp -f "${ROOT}/static/armbian-motd" "${FS_MNT_POINT}/etc/default" || return 1
+  info "Copying headers (so OS presents itself as Skybian)..."
+  sudo cp "${ROOT}/static/10-skyraspbian-header" "${FS_MNT_POINT}/etc/update-motd.d/" || return 1
+  sudo chmod +x "${FS_MNT_POINT}/etc/update-motd.d/10-skyraspbian-header" || return 1
+  sudo rm -rf "${FS_MNT_POINT}/etc/10-uname" || return 1
+  sudo rm -rf "${FS_MNT_POINT}/etc/motd" || return 1
 
   # Copy systemd units
   info "Copying systemd unit services..."
