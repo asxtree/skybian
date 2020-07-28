@@ -211,7 +211,7 @@ get_raspbian()
     info "Raspbian file to process is '${RASPBIAN_IMG_7z}'."
 
     # check if extracted image is in there to save time
-    if [ -n "$(ls *raspbian*.img || true)" ] ; then
+    if [ -n "$(ls *rasp*.img || true)" ] ; then
         # image already extracted nothing to do
         notice "Raspbian image already extracted"
     else
@@ -233,7 +233,7 @@ get_raspbian()
     #fi
 
     # get image filename
-    RASPBIAN_IMG=$(ls *raspbian*.img || true)
+    RASPBIAN_IMG=$(ls *rasp*.img || true)
 
     # imge integrity
     #info "Image integrity assured via sha256sum."
