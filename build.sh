@@ -3,6 +3,7 @@
 # This is the main script to build the Skybian OS for Skycoin miners.
 #
 # Author: evanlinjin@github.com, @evanlinjin in telegram
+# Updated by: asxtree@github.com, @asxtree in telegram
 # Skycoin / Rudi team
 #
 
@@ -13,8 +14,8 @@ source "$(pwd)/build.conf"
 ## Variables.
 
 # Needed tools to run this script, space separated
-# On arch/manjaro, the qemu-aarch64-static dependency is satisfied by installing the 'qemu-arm-static' AUR package.
-NEEDED_TOOLS="rsync wget 7z cut awk sha256sum gzip tar e2fsck losetup resize2fs truncate sfdisk qemu-aarch64-static go"
+# On arch/manjaro, the qemu-arm-static dependency is satisfied by installing the 'qemu-user-static' package.
+NEEDED_TOOLS="rsync wget 7z cut awk sha256sum gzip tar e2fsck losetup resize2fs truncate sfdisk qemu-aarch64-static qemu-arm-static go"
 
 # Output directory.
 PARTS_DIR=${ROOT}/output/parts
@@ -26,15 +27,15 @@ FINAL_IMG_DIR=${ROOT}/output/final
 BASE_IMG=${IMAGE_DIR}/base_image
 
 # Download directories.
-PARTS_ARMBIAN_DIR=${PARTS_DIR}/armbian
+PARTS_RASPBIAN_DIR=${PARTS_DIR}/raspbian
 PARTS_SKYWIRE_DIR=${PARTS_DIR}/skywire
 PARTS_TOOLS_DIR=${PARTS_DIR}/tools
 
 # Image related variables.
-ARMBIAN_IMG_7z=""
-ARMBIAN_IMG=""
-ARMBIAN_VERSION=""
-ARMBIAN_KERNEL_VERSION=""
+RASPBIAN_IMG_7z=""
+RASPBIAN_IMG=""
+RASPBIAN_VERSION=""
+RASPBIAN_KERNEL_VERSION=""
 
 # Loop device.
 IMG_LOOP="" # free loop device to be used.
@@ -129,7 +130,7 @@ create_folders()
     info "Creating output folder structure..."
     mkdir -p "$FINAL_IMG_DIR"
     mkdir -p "$FS_MNT_POINT"
-    mkdir -p "$PARTS_DIR" "$PARTS_ARMBIAN_DIR" "$PARTS_SKYWIRE_DIR" "$PARTS_TOOLS_DIR"
+    mkdir -p "$PARTS_DIR" "$PARTS_RASPBIAN_DIR" "$PARTS_SKYWIRE_DIR" "$PARTS_TOOLS_DIR"
     mkdir -p "$IMAGE_DIR"
 
     info "Done!"
@@ -143,7 +144,7 @@ get_tools()
   info "Building skyconf..."
   info "_src=$_src"
   info "_out=$_out"
-  env GOOS=linux GOARCH=arm64 GOARM=7 go build -o "$_out" -v "$_src" || return 1
+  env GOOS=linux GOARCH=arm GOARM=7 go build -o "$_out" -v "$_src" || return 1
 
   info "Done!"
 }
@@ -172,29 +173,29 @@ get_skywire()
   info "Done!"
 }
 
-download_armbian()
+download_raspbian()
 {
-  local _DST=${PARTS_ARMBIAN_DIR}/armbian.7z # Download destination file name.
+  local _DST=${PARTS_RASPBIAN_DIR}/raspbian.7z # Download destination file name.
 
-  info "Downloading image from ${ARMBIAN_DOWNLOAD_URL} to ${_DST} ..."
-  wget -c "${ARMBIAN_DOWNLOAD_URL}" -O "${_DST}" ||
+  info "Downloading image from ${RASPBIAN_DOWNLOAD_URL} to ${_DST} ..."
+  wget -c "${RASPBIAN_DOWNLOAD_URL}" -O "${_DST}" ||
     (error "Download failed." && return 1)
 }
 
-# Get the latest ARMBIAN image for Orange Pi Prime
-get_armbian()
+# Get the latest RASPBIAN image for Raspberry Pi boards
+get_raspbian()
 {
-  local ARMBIAN_IMG_7z="armbian.7z"
+  local RASPBIAN_IMG_7z="raspbian.7z"
 
     # change to dest dir
-    cd "${PARTS_ARMBIAN_DIR}" ||
+    cd "${PARTS_RASPBIAN_DIR}" ||
       (error "Failed to cd." && return 1)
 
     # user info
-    info "Getting Armbian image, clearing dest dir first."
+    info "Getting Raspbian image, clearing dest dir first."
 
     # test if we have a file in there
-    if [ -r armbian.7z ] ; then
+    if [ -r raspbian.7z ] ; then
 
         # use already downloaded image file
         notice "Reusing already downloaded file"
@@ -203,57 +204,66 @@ get_armbian()
         info "No cached image, downloading.."
 
         # download it
-        download_armbian
+        download_raspbian
     fi
 
     # extract and check it's integrity
-    info "Armbian file to process is '${ARMBIAN_IMG_7z}'."
+    info "Raspbian file to process is '${RASPBIAN_IMG_7z}'."
 
     # check if extracted image is in there to save time
-    if [ -n "$(ls Armbian*.img || true)" ] ; then
+    if [ -n "$(ls *rasp*.img || true)" ] ; then
         # image already extracted nothing to do
-        notice "Armbian image already extracted"
+        notice "Raspbian image already extracted"
     else
-        # extract armbian
+        # extract raspbian
         info "Extracting image..."
-        if ! 7z e "${ARMBIAN_IMG_7z}" ; then
+        if ! 7z e "${RASPBIAN_IMG_7z}" ; then
             error "Extracting failed, file is corrupt? Re-run the script to get it right."
-            rm "${ARMBIAN_IMG_7z}" &> /dev/null || true
+            rm "${RASPBIAN_IMG_7z}" &> /dev/null || true
             exit 1
         fi
     fi
 
-    # check integrity
-    info "Testing image integrity..."
-    if ! $(command -v sha256sum) -c --status -- *.sha ; then
-        error "Integrity of the image is compromised, re-run the script to get it right."
-        rm -- *img *txt *sha *7z &> /dev/null || true
-        exit 1
-    fi
+    # check integrity - Needs to be updated for Raspbian
+    #info "Testing image integrity..."
+    #if ! $(command -v sha256sum) -c --status -- *.sha ; then
+    #    error "Integrity of the image is compromised, re-run the script to get it right."
+    #    rm -- *img *txt *sha *7z &> /dev/null || true
+    #    exit 1
+    #fi
 
     # get image filename
-    ARMBIAN_IMG=$(ls Armbian*.img || true)
+    RASPBIAN_IMG=$(ls *rasp*.img || true)
 
     # imge integrity
-    info "Image integrity assured via sha256sum."
-    notice "Final image file is ${ARMBIAN_IMG}"
-
-    # get version & kernel version info
-    ARMBIAN_VERSION=$(echo "${ARMBIAN_IMG}" | awk -F '_' '{ print $2 }')
-    ARMBIAN_KERNEL_VERSION=$(echo "${ARMBIAN_IMG}" | awk -F '_' '{ print $6 }' | rev | cut -d '.' -f2- | rev)
-
-    # info to the user
-    notice "Armbian version: ${ARMBIAN_VERSION}"
-    notice "Armbian kernel version: ${ARMBIAN_KERNEL_VERSION}"
+    #info "Image integrity assured via sha256sum."
+    notice "Final image file is ${RASPBIAN_IMG}"
 }
 
 get_all()
 {
-  get_armbian || return 1
+  get_raspbian || return 1
   get_skywire || return 1
   get_tools || return 1
 }
 
+enable_ssh()
+{
+	info "Mounting /boot"
+	mount -o loop,offset=4194304 "${PARTS_DIR}/raspbian/${RASPBIAN_IMG}" "${FS_MNT_POINT}"
+ 
+	info "Enabling UART"
+	sudo sed -i '/^#dtoverlay=vc4-fkms-v3d.*/a enable_uart=1' "${FS_MNT_POINT}/config.txt"
+ 
+	info "Enabling HDMI"
+	sudo sed -i 's/#hdmi_force_hotplug=1/hdmi_force_hotplug=1/' "${FS_MNT_POINT}/config.txt"
+ 
+	info "Enabling SSH"
+	touch "${FS_MNT_POINT}/SSH.txt"
+ 
+	info "Unmounting /boot"
+	umount "${FS_MNT_POINT}"
+}
 
 # setup the rootfs to a loop device
 setup_loop()
@@ -290,35 +300,23 @@ rootfs_check()
 }
 
 # Prepares base image.
-# - Copy armbian img to base img loc
-# - Increase base image size & prepare loop device
+# - Copy raspbian img to base img loc
 # - Mount loop device
 prepare_base_image()
 {
-  # Armbian image is tight packed, and we need room for adding our
-  # bins, apps & configs, so we will make it bigger
+  # Raspbian has enough room for adding our
+  # bins, apps & configs, making it bigger may result in kernel panic
 
   # clean
   info "Cleaning..."
   rm -rf "${IMAGE_DIR:?}/*" &> /dev/null || true
 
-  # copy armbian image to base image location
+  # copy raspbian image to base image location
   info "Copying base image..."
-  cp "${PARTS_DIR}/armbian/${ARMBIAN_IMG}" "${BASE_IMG}" || return 1
-
-  # Add space to base image
-  if [[ "$BASE_IMG_ADDED_SPACE" -ne "0" ]]; then
-    info "Adding ${BASE_IMG_ADDED_SPACE}MB of extra space to the image..."
-    truncate -s +"${BASE_IMG_ADDED_SPACE}M" "${BASE_IMG}"
-    echo ", +" | sfdisk -N1 "${BASE_IMG}" # add free space to the part 1 (sfdisk way)
-  fi
+  cp "${PARTS_DIR}/raspbian/${RASPBIAN_IMG}" "${BASE_IMG}" || return 1
 
   info "Setting up loop device..."
   setup_loop || return 1
-  rootfs_check || return 1
-
-  info "Resizing root fs..."
-  sudo resize2fs "${IMG_LOOP}" || return 1
   rootfs_check || return 1
 
   info "Mounting root fs to ${FS_MNT_POINT}..."
@@ -339,14 +337,15 @@ copy_to_img()
   info "Copying skywire tools..."
   sudo cp -rf "$PARTS_TOOLS_DIR"/* "$FS_MNT_POINT"/usr/bin/ || return 1
 
-  # Copy scripts
-  info "Copying disable user creation script..."
-  sudo cp -f "${ROOT}/static/armbian-check-first-login.sh" "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
-  sudo chmod +x "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
+  # Copy scripts - Needs to be updated with raspbian motd
+  #info "Copying disable user creation script..."
+  #sudo cp -f "${ROOT}/static/armbian-check-first-login.sh" "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
+  #sudo chmod +x "${FS_MNT_POINT}/etc/profile.d/armbian-check-first-login.sh" || return 1
   info "Copying headers (so OS presents itself as Skybian)..."
-  sudo cp "${ROOT}/static/10-skybian-header" "${FS_MNT_POINT}/etc/update-motd.d/" || return 1
-  sudo chmod +x "${FS_MNT_POINT}/etc/update-motd.d/10-skybian-header" || return 1
-  sudo cp -f "${ROOT}/static/armbian-motd" "${FS_MNT_POINT}/etc/default" || return 1
+  sudo cp "${ROOT}/static/10-skyraspbian-header" "${FS_MNT_POINT}/etc/update-motd.d/" || return 1
+  sudo chmod +x "${FS_MNT_POINT}/etc/update-motd.d/10-skyraspbian-header" || return 1
+  sudo rm -rf "${FS_MNT_POINT}/etc/10-uname" || return 1
+  sudo rm -rf "${FS_MNT_POINT}/etc/motd" || return 1
 
   # Copy systemd units
   info "Copying systemd unit services..."
@@ -356,7 +355,7 @@ copy_to_img()
   info "Done!"
 }
 
-# fix some defaults on armbian to skywire defaults
+# fix some defaults on raspbian to skywire defaults
 chroot_actions()
 {
   # copy chroot scripts to root fs
@@ -366,19 +365,25 @@ chroot_actions()
 
   # enable chroot
   info "Seting up chroot jail..."
-  sudo cp "$(command -v qemu-aarch64-static)" "${FS_MNT_POINT}/usr/bin/"
+  sudo cp "$(command -v qemu-arm-static)" "${FS_MNT_POINT}/usr/bin/"
   sudo mount -t sysfs none "${FS_MNT_POINT}/sys"
   sudo mount -t proc none "${FS_MNT_POINT}/proc"
   sudo mount --bind /dev "${FS_MNT_POINT}/dev"
   sudo mount --bind /dev/pts "${FS_MNT_POINT}/dev/pts"
+  
+  # ld.so.preload fix
+  sed -i 's/^/#/g' "${FS_MNT_POINT}/etc/ld.so.preload"
 
   # Executing chroot script
   info "Executing chroot script..."
   sudo chroot "${FS_MNT_POINT}" /tmp/chroot_commands.sh
-
+  
+  # revert ld.so.preload fix
+  sed -i 's/^#//g' "${FS_MNT_POINT}/etc/ld.so.preload"
+  
   # disable chroot
   info "Disabling the chroot jail..."
-  sudo rm "${FS_MNT_POINT}/usr/bin/qemu-aarch64-static"
+  sudo rm "${FS_MNT_POINT}/usr/bin/qemu-arm-static"
   sudo umount "${FS_MNT_POINT}/sys"
   sudo umount "${FS_MNT_POINT}/proc"
   sudo umount "${FS_MNT_POINT}/dev/pts"
@@ -440,7 +445,7 @@ clean_image()
 clean_output_dir()
 {
   # Clean parts.
-  cd "${PARTS_ARMBIAN_DIR}" && find . -type f ! -name '*.7z' -delete
+  cd "${PARTS_RASPBIAN_DIR}" && find . -type f ! -name '*.7z' -delete
   cd "${PARTS_SKYWIRE_DIR}" && find . -type f ! -name '*.tar.gz' -delete && rm -rf bin
   cd "${FINAL_IMG_DIR}" && find . -type f ! -name '*.tar.xz' -delete
 
@@ -458,7 +463,7 @@ build_disk()
   cd "${IMAGE_DIR}" || return 1
 
   # final name
-  local NAME="Skybian-${VERSION}"
+  local NAME="SkyRaspbian-${VERSION}"
 
   # info
   info "Building image for ${NAME}"
@@ -473,12 +478,6 @@ build_disk()
 
   # check integrity & fix minor errors
   rootfs_check
-
-  # TODO [TEST]
-  # shrink the partition to a minimum size
-  # sudo resize2fs -M "${IMG_LOOP}"
-  #
-  # shrink the partition
 
   # force a FS sync
   info "Forcing a fs rsync to umount the loop device"
@@ -511,6 +510,9 @@ main_build()
 
     # download resources
     get_all || return 1
+	
+	# enable ssh, hdmi and uart
+	enable_ssh || return 1
 
     # prepares and mounts base image
     prepare_base_image || return 1
@@ -520,7 +522,7 @@ main_build()
 
     # setup chroot
     chroot_actions || return 1
-
+	
     # build manager image
     build_disk || return 1
 
