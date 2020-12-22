@@ -69,7 +69,7 @@ No parameters means image creation without checksum and packing
 To know more about the script work, please refers to the file
 called Building_Skybian.md on this folder.
 
-Latest code can be found on https://github.com/SkycoinProject/skybian
+Latest code can be found on https://github.com/skycoin/skybian
 
 EOF
 
@@ -419,8 +419,7 @@ calc_sums_compress()
     # compress
     info "Compressing, this will take a while..."
     name=$(echo "${img}" | rev | cut -d '.' -f 2- | rev)
-    tar -cvf "${name}.tar" "${img}"*
-    xz -vzT0 "${name}.tar"
+    tar -cvzf "${name}.tar.gz" "${img}"*
   done
 
   cd "${ROOT}" || return 1
@@ -447,7 +446,7 @@ clean_output_dir()
   # Clean parts.
   cd "${PARTS_RASPBIAN_DIR}" && find . -type f ! -name '*.7z' -delete
   cd "${PARTS_SKYWIRE_DIR}" && find . -type f ! -name '*.tar.gz' -delete && rm -rf bin
-  cd "${FINAL_IMG_DIR}" && find . -type f ! -name '*.tar.xz' -delete
+  cd "${FINAL_IMG_DIR}" && find . -type f ! -name '*.tar.gz' -delete
 
   # Rm base image.
   rm -v "${IMAGE_DIR}/base_image"

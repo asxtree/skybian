@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	ghOwner = "SkycoinProject"
+	ghOwner = "skycoin"
 	ghRepo  = "skybian"
 )
 
 func expectedBaseImgAssetName(tag string) string {
-	return fmt.Sprintf("Skybian-%s%s", tag, ExtTarXz)
+	return fmt.Sprintf("Skybian-%s%s", tag, ExtTarGz)
 }
 
 // LatestBaseImgURL returns the latest stable base image download URL.

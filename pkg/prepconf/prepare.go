@@ -6,15 +6,15 @@ import (
 	"log"
 	"os"
 
-	"github.com/SkycoinProject/dmsg/cipher"
-	"github.com/SkycoinProject/skywire-mainnet/pkg/app/appcommon"
-	"github.com/SkycoinProject/skywire-mainnet/pkg/hypervisor"
-	"github.com/SkycoinProject/skywire-mainnet/pkg/restart"
-	"github.com/SkycoinProject/skywire-mainnet/pkg/routing"
-	"github.com/SkycoinProject/skywire-mainnet/pkg/skyenv"
-	"github.com/SkycoinProject/skywire-mainnet/pkg/visor"
+	"github.com/skycoin/dmsg/cipher"
+	"github.com/skycoin/skywire/pkg/app/launcher"
+	"github.com/skycoin/skywire/pkg/hypervisor"
+	"github.com/skycoin/skywire/pkg/restart"
+	"github.com/skycoin/skywire/pkg/routing"
+	"github.com/skycoin/skywire/pkg/skyenv"
+	"github.com/skycoin/skywire/pkg/visor/visorconfig"
 
-	"github.com/SkycoinProject/skybian/pkg/boot"
+	"github.com/skycoin/skybian/pkg/boot"
 )
 
 // Config configures how hypervisor and visor images are to be generated.
@@ -95,62 +95,68 @@ func generateVisorConfig(_ Config, bp boot.Params) (interface{}, error) {
 		}
 		return args
 	}
-	hypervisors := func() (hvs []visor.HypervisorConfig) {
-		for _, pk := range bp.HypervisorPKs {
-			hvs = append(hvs, visor.HypervisorConfig{PubKey: pk})
-		}
-		return hvs
-	}
-	pk, sk, err := genKeyPair(bp)
+
+	_, sk, err := genKeyPair(bp)
 	if err != nil {
 		return nil, err
 	}
-	out := new(visor.Config)
 
-	out.Version = "1.0"
-	out.KeyPair = &visor.KeyPair{
-		PubKey: pk,
-		SecKey: sk,
+	out, err := visorconfig.MakeDefaultConfig(nil, "", &sk)
+	if err != nil {
+		return nil, err
 	}
+
 	// TODO(evanlinjin): We need to handle STCP properly.
 	//if out.STCP, err = visor.DefaultSTCPConfig(); err != nil {
 	//	return nil, err
 	//}
-	out.Dmsg = visor.DefaultDmsgConfig()
-	out.DmsgPty = visor.DefaultDmsgPtyConfig()
-	out.DmsgPty.AuthFile = "/var/skywire-visor/dsmgpty/whitelist.json"
-	out.DmsgPty.CLIAddr = "/run/skywire-visor/dmsgpty/cli.sock"
-	out.Transport = visor.DefaultTransportConfig()
+
+	out.Dmsgpty.AuthFile = "/var/skywire-visor/dsmgpty/whitelist.json"
+	out.Dmsgpty.CLIAddr = "/run/skywire-visor/dmsgpty/cli.sock"
+	out.Transport.LogStore.Type = "file"
 	out.Transport.LogStore.Location = "/var/skywire-visor/transports"
-	out.Routing = visor.DefaultRoutingConfig()
-	out.UptimeTracker = visor.DefaultUptimeTrackerConfig()
-	out.Hypervisors = hypervisors()
-	out.LogLevel = visor.DefaultLogLevel
-	out.ShutdownTimeout = visor.DefaultTimeout
+	out.Hypervisors = bp.HypervisorPKs
+	out.LogLevel = skyenv.DefaultLogLevel
+	out.ShutdownTimeout = visorconfig.DefaultTimeout
 	out.RestartCheckDelay = restart.DefaultCheckDelay.String()
-	out.Interfaces = visor.DefaultInterfaceConfig()
-	out.AppServerAddr = appcommon.DefaultServerAddr
-	out.AppsPath = "/usr/bin/apps"
-	out.LocalPath = "/var/skywire-visor/apps"
-	out.Apps = []visor.AppConfig{
-		{
-			App:       skyenv.SkychatName,
-			AutoStart: true,
-			Port:      routing.Port(skyenv.SkychatPort),
-			Args:      []string{"-addr", skyenv.SkychatAddr},
+	out.Launcher = &visorconfig.V1Launcher{
+		Discovery: &visorconfig.V1AppDisc{
+			ServiceDisc:    skyenv.DefaultServiceDiscAddr,
+			UpdateInterval: visorconfig.Duration(skyenv.AppDiscUpdateInterval),
 		},
-		{
-			App:       skyenv.SkysocksName,
-			AutoStart: true,
-			Port:      routing.Port(skyenv.SkysocksPort),
-			Args:      skysocksArgs(),
+		Apps: []launcher.AppConfig{
+			{
+				Name:      skyenv.SkychatName,
+				AutoStart: true,
+				Port:      routing.Port(skyenv.SkychatPort),
+				Args:      []string{"-addr", skyenv.SkychatAddr},
+			},
+			{
+				Name:      skyenv.SkysocksName,
+				AutoStart: true,
+				Port:      routing.Port(skyenv.SkysocksPort),
+				Args:      skysocksArgs(),
+			},
+			{
+				Name:      skyenv.SkysocksClientName,
+				AutoStart: false,
+				Port:      routing.Port(skyenv.SkysocksClientPort),
+				Args:      []string{"-addr", skyenv.SkysocksClientAddr},
+			},
+			{
+				Name:      "vpn-server",
+				AutoStart: false,
+				Port:      routing.Port(44),
+			},
+			{
+				Name:      "vpn-client",
+				AutoStart: false,
+				Port:      routing.Port(43),
+			},
 		},
-		{
-			App:       skyenv.SkysocksClientName,
-			AutoStart: false,
-			Port:      routing.Port(skyenv.SkysocksClientPort),
-			Args:      []string{"-addr", skyenv.SkysocksClientAddr},
-		},
+		ServerAddr: skyenv.DefaultAppSrvAddr,
+		BinPath:    "/usr/bin/apps",
+		LocalPath:  "/var/skywire-visor/apps",
 	}
 	return out, nil
 }
